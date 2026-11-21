@@ -10,6 +10,8 @@ VOICES_TO_TRY = [
     "en-US-AriaNeural",
 ]
 
+PER_VOICE_TIMEOUT = 20
+
 
 def get_today_folder() -> str:
     now_utc = datetime.datetime.now(datetime.timezone.utc)
@@ -17,21 +19,32 @@ def get_today_folder() -> str:
     return os.path.join("scripts", date_folder)
 
 
+async def try_single_voice(text: str, output_path: str, voice: str):
+    communicate = edge_tts.Communicate(
+        text=text,
+        voice=voice,
+        rate="+4%",
+        pitch="+0Hz",
+    )
+    await communicate.save(output_path)
+
+
 async def generate_with_fallback(text: str, output_path: str):
     errors = []
     for voice in VOICES_TO_TRY:
         try:
-            print(f"Trying voice: {voice}...")
-            communicate = edge_tts.Communicate(
-                text=text,
-                voice=voice,
-                rate="+4%",
-                pitch="+0Hz",
+            print(f"Trying voice: {voice} (timeout={PER_VOICE_TIMEOUT}s)...")
+            await asyncio.wait_for(
+                try_single_voice(text, output_path, voice),
+                timeout=PER_VOICE_TIMEOUT,
             )
-            await communicate.save(output_path)
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 print(f"Success with voice: {voice}")
                 return voice
+        except asyncio.TimeoutError:
+            msg = f"{voice} timed out after {PER_VOICE_TIMEOUT}s"
+            print(msg)
+            errors.append(msg)
         except Exception as exc:
             msg = f"{voice} failed -> {exc}"
             print(msg)
@@ -60,4 +73,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-      
+        
