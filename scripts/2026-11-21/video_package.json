@@ -1,14 +1,14 @@
 {
-  "title": "Stop Copy-Pasting AI Prompts. Build This Instead.",
-  "description": "Stop acting like human glue between your tabs. Here is why a single automated intake-to-booking pipeline destroys manual ChatGPT prompting every single time.",
-  "narration": "Typing ten ChatGPT prompts a day isn't automation. It’s just glorified data entry.\n\nThink about your typical morning. A high-value inquiry lands in your inbox. You open ChatGPT, paste the email, ask for a summary, generate a reply, copy it over to your CRM, and then switch tabs to find a Calendly link. You feel productive because you used AI. But let’s be honest: you’re just acting as expensive human glue between five open browser windows.\n\nHere is the shift that changes everything: replace ten manual prompts with one silent, automated workflow.\n\nThe moment an inquiry hits your form, a single background pipeline parses the client’s exact intent, enriches their company profile, checks your real-time calendar, and sends a personalized booking invitation instantly.\n\nNo copy-pasting. No prompt tweaks. No lost momentum.\n\nWhile your competitor is still struggling with prompt number four to fix a polite tone, your workflow just qualified, processed, and booked a high-ticket call automatically at 2 AM.\n\nPrompts give you text on a screen. Workflows give you back your actual time. Stop playing chatbot operator—start building systems that execute.",
+  "title": "Stop Prompting ChatGPT. Build This One Pipeline Instead",
+  "description": "Copy-pasting prompts into ChatGPT isn't automation—it's just digital manual labor. Here is why a single automated intake-to-booking pipeline outperforms fragmented AI prompting every single day.",
+  "narration": "Copying and pasting prompts into ChatGPT is not automation. It’s just digital manual labor with extra steps. Every time an inquiry lands, you open a new tab, paste a prompt, fix the tone, drop in your calendar link, and pray they don’t ghost. By the time you hit send, your competitor’s intake pipeline has already qualified the prospect, extracted their budget, logged the record into the CRM, and served up a personalized booking link. All while they were making coffee. Ten clever prompts don’t scale. One connected workflow does. A webhook catches the form. A fast LLM parses the intake into clean JSON. A conditional router weeds out the tire-kickers. And the serious buyer receives a tailored invite within ninety seconds flat. Zero tabs. Zero context switching. If your AI ops still rely on muscle memory and keyboard shortcuts, you don’t have an automated business—you just have a second job as a prompt babysitter. Build the pipeline once. Lock in the routing. Stop asking an AI to do your chores, and build the machine that runs them.",
   "scenes": [
-    "Fast-paced POV shot of a stressed desk worker rapidly alt-tabbing between ChatGPT, Gmail, and a CRM, with an onscreen timer rapidly counting up wasted minutes.",
-    "Slick 3D motion graphic showing a clean node-based workflow (n8n/Make style) smoothly passing data from an incoming webform to an automated booking engine.",
-    "Cinematic dark-mode macro shot of a smartphone lighting up on a nightstand at 2:00 AM displaying a notification: 'New High-Ticket Booking Confirmed'.",
-    "Minimalist modern desk setup; presenter smoothly closes their laptop screen as a bold side-by-side graphic contrasts 'Manual Prompts' with 'Automated Pipelines'."
+    "Over-the-shoulder macro shot of a chaotic desktop: 14 open browser tabs, a glowing ChatGPT window, and repetitive Command+C / Command+V keyboard shortcuts under cold fluorescent lighting.",
+    "Sleek dynamic screen recording of a visual workflow canvas (n8n or Make) with nodes firing smoothly in real-time as a test lead is ingested and routed.",
+    "Clean visual breakdown: raw contact form input morphs into structured JSON code, splitting automatically through green-lit filter paths straight into an instant calendar confirmation.",
+    "A modern studio setup: creator calmly closes an ultra-thin laptop while a sleek translucent graphic overlay shows automated qualified bookings logging seamlessly in the background."
   ],
-  "used_model": "gemini-3.5-flash",
+  "used_model": "gemini-3.8-flash",
   "daily_angle": "One workflow vs ten prompts: how a single automated intake-to-booking pipeline beats manual admin every day",
   "date": "2026-11-21"
 }
