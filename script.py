@@ -27,8 +27,13 @@ DAILY_ANGLES = [
     "Why 'set and forget' AI breaks—and how real operators design self-healing automations that scale quietly",
 ]
 
-run_day = datetime.datetime.now(datetime.timezone.utc).timetuple().tm_yday
+now_utc = datetime.datetime.now(datetime.timezone.utc)
+date_folder = now_utc.strftime("%Y-%m-%d")
+run_day = now_utc.timetuple().tm_yday
 TODAY_TOPIC = DAILY_ANGLES[run_day % len(DAILY_ANGLES)]
+
+out_dir = os.path.join("scripts", date_folder)
+os.makedirs(out_dir, exist_ok=True)
 
 PROMPT = f"""
 You are a top-tier creative director and scriptwriter for a high-performing US/UK tech & AI operations YouTube channel.
@@ -78,14 +83,18 @@ if raw.startswith("```"):
 data = json.loads(raw)
 data["used_model"] = used_model
 data["daily_angle"] = TODAY_TOPIC
+data["date"] = date_folder
 
-with open("video_package.json", "w", encoding="utf-8") as f:
+narration_path = os.path.join(out_dir, "narration.txt")
+package_path = os.path.join(out_dir, "video_package.json")
+
+with open(package_path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 
-with open("narration.txt", "w", encoding="utf-8") as f:
+with open(narration_path, "w", encoding="utf-8") as f:
     f.write(data["narration"].strip())
 
 print("USED MODEL:", used_model)
-print("DAILY ANGLE:", TODAY_TOPIC)
+print("DATE FOLDER:", out_dir)
 print("TITLE:", data["title"])
-print("Saved narration.txt and video_package.json")
+print(f"Saved {narration_path} and {package_path}")
