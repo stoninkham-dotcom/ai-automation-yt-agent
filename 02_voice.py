@@ -1,6 +1,8 @@
 import asyncio
 import datetime
 import os
+import shutil
+import subprocess
 import edge_tts
 
 VOICES_TO_TRY = [
@@ -10,7 +12,8 @@ VOICES_TO_TRY = [
     "en-US-AriaNeural",
 ]
 
-PER_VOICE_TIMEOUT = 20
+PER_VOICE_TIMEOUT = 25
+VOICE_RATE = "+15%"
 
 
 def get_today_folder() -> str:
@@ -23,10 +26,39 @@ async def try_single_voice(text: str, output_path: str, voice: str):
     communicate = edge_tts.Communicate(
         text=text,
         voice=voice,
-        rate="+4%",
-        pitch="+0Hz",
+        rate=VOICE_RATE,
+        pitch="+1Hz",
     )
     await communicate.save(output_path)
+
+
+def trim_dead_air(mp3_path: str):
+    if not shutil.which("ffmpeg"):
+        print("ffmpeg nahi mila, silence cut skip kiya gaya.")
+        return
+
+    temp_raw = mp3_path + ".raw.mp3"
+    os.replace(mp3_path, temp_raw)
+
+    # Lambe pauses/silence kat kar voice ko Shorts ke liye tight banana
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        temp_raw,
+        "-af",
+        "silenceremove=start_periods=1:start_silence=0.15:start_threshold=-42dB:stop_periods=-1:stop_silence=0.18:stop_threshold=-42dB",
+        "-b:a",
+        "192k",
+        mp3_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0 and os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0:
+        os.remove(temp_raw)
+        print("Lambe pauses/silence cut kar diye gaye hain.")
+    else:
+        os.replace(temp_raw, mp3_path)
+        print("Silence cut nahi ho saka, original audio rakha gaya.")
 
 
 async def generate_with_fallback(text: str, output_path: str):
@@ -39,6 +71,7 @@ async def generate_with_fallback(text: str, output_path: str):
                 timeout=PER_VOICE_TIMEOUT,
             )
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                trim_dead_air(output_path)
                 print(f"Success with voice: {voice}")
                 return voice
         except asyncio.TimeoutError:
@@ -73,4 +106,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
