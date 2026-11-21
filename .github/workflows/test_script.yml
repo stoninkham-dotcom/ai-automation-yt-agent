@@ -18,8 +18,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install google-genai edge-tts
+      - name: Install ffmpeg and Python packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install google-genai edge-tts
 
       - name: Run script.py
         env:
