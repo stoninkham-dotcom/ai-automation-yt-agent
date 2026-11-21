@@ -1,0 +1,14 @@
+{
+  "title": "Stop Copy-Pasting AI Prompts. Build This Instead.",
+  "description": "Stop acting like human glue between your tabs. Here is why a single automated intake-to-booking pipeline destroys manual ChatGPT prompting every single time.",
+  "narration": "Typing ten ChatGPT prompts a day isn't automation. It’s just glorified data entry.\n\nThink about your typical morning. A high-value inquiry lands in your inbox. You open ChatGPT, paste the email, ask for a summary, generate a reply, copy it over to your CRM, and then switch tabs to find a Calendly link. You feel productive because you used AI. But let’s be honest: you’re just acting as expensive human glue between five open browser windows.\n\nHere is the shift that changes everything: replace ten manual prompts with one silent, automated workflow.\n\nThe moment an inquiry hits your form, a single background pipeline parses the client’s exact intent, enriches their company profile, checks your real-time calendar, and sends a personalized booking invitation instantly.\n\nNo copy-pasting. No prompt tweaks. No lost momentum.\n\nWhile your competitor is still struggling with prompt number four to fix a polite tone, your workflow just qualified, processed, and booked a high-ticket call automatically at 2 AM.\n\nPrompts give you text on a screen. Workflows give you back your actual time. Stop playing chatbot operator—start building systems that execute.",
+  "scenes": [
+    "Fast-paced POV shot of a stressed desk worker rapidly alt-tabbing between ChatGPT, Gmail, and a CRM, with an onscreen timer rapidly counting up wasted minutes.",
+    "Slick 3D motion graphic showing a clean node-based workflow (n8n/Make style) smoothly passing data from an incoming webform to an automated booking engine.",
+    "Cinematic dark-mode macro shot of a smartphone lighting up on a nightstand at 2:00 AM displaying a notification: 'New High-Ticket Booking Confirmed'.",
+    "Minimalist modern desk setup; presenter smoothly closes their laptop screen as a bold side-by-side graphic contrasts 'Manual Prompts' with 'Automated Pipelines'."
+  ],
+  "used_model": "gemini-3.5-flash",
+  "daily_angle": "One workflow vs ten prompts: how a single automated intake-to-booking pipeline beats manual admin every day",
+  "date": "2026-11-21"
+}
