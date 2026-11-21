@@ -13,7 +13,7 @@ VOICES_TO_TRY = [
 ]
 
 PER_VOICE_TIMEOUT = 25
-VOICE_RATE = "+15%"
+VOICE_RATE = "+14%"
 
 
 def get_today_folder() -> str:
@@ -40,14 +40,14 @@ def trim_dead_air(mp3_path: str):
     temp_raw = mp3_path + ".raw.mp3"
     os.replace(mp3_path, temp_raw)
 
-    # Lambe pauses/silence kat kar voice ko Shorts ke liye tight banana
+    # Lambe silences kat kar crisp short-form rhythm rakhna
     cmd = [
         "ffmpeg",
         "-y",
         "-i",
         temp_raw,
         "-af",
-        "silenceremove=start_periods=1:start_silence=0.15:start_threshold=-42dB:stop_periods=-1:stop_silence=0.18:stop_threshold=-42dB",
+        "silenceremove=start_periods=1:start_silence=0.15:start_threshold=-42dB:stop_periods=-1:stop_silence=0.24:stop_threshold=-42dB",
         "-b:a",
         "192k",
         mp3_path,
@@ -55,7 +55,7 @@ def trim_dead_air(mp3_path: str):
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0 and os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0:
         os.remove(temp_raw)
-        print("Lambe pauses/silence cut kar diye gaye hain.")
+        print("Lambe pauses kat kar crisp rhythm set kar diya gaya.")
     else:
         os.replace(temp_raw, mp3_path)
         print("Silence cut nahi ho saka, original audio rakha gaya.")
@@ -106,4 +106,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+            
