@@ -3,6 +3,9 @@ name: Test Script Generator
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run-script:
     runs-on: ubuntu-latest
@@ -22,4 +25,12 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python script.py
-        
+
+      - name: Save daily scripts folder to repo
+        run: |
+          git config user.name "yt-agent-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add scripts/
+          git commit -m "Add daily script package" || echo "No changes"
+          git push
+          
