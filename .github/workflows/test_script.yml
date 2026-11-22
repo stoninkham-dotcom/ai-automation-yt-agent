@@ -21,7 +21,7 @@ jobs:
       - name: Install ffmpeg and Python packages
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install google-genai edge-tts
+          pip install google-genai edge-tts pillow
 
       - name: Run script.py
         env:
