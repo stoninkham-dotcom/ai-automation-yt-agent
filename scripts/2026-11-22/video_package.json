@@ -1,0 +1,14 @@
+{
+  "title": "Why Your Fast AI Bot Is Killing Conversions",
+  "description": "Instant AI replies are alienating inbound leads. Here is the operational playbook clinics and agencies use to automate without sounding like an unfeeling bot.",
+  "narration": "A zero-second reply doesn't impress your leads. It alarms them. Right now, clinics and agencies are obsessed with sub-second AI response times. But look at what actually happens. A patient texts in with an anxious question about a procedure, or a founder asks about retainer pricing. In under two hundred milliseconds, your bot fires back a spotless, four-paragraph corporate essay that ends with an aggressive booking link. It doesn't feel efficient. It feels fake, lazy, and completely detached. Real speed isn't raw velocity. It’s time-to-relevance. The most profitable automation setups don't rush the reply. They insert an intentional ninety-second buffer. While the prospect waits, the system does the actual heavy lifting: pulling CRM context, analyzing the emotional tone, and generating a tight, three-line reply that sounds like a busy specialist typing from their phone. Kill the robotic cheerfulness. Ditch the corporate filler. When someone feels genuinely understood instead of routed through an automated triage funnel, sales friction evaporates. Stop using AI to speak faster. Use it to listen better.",
+  "scenes": [
+    "Extreme close-up of a smartphone screen receiving an anxious late-night inquiry, instantly followed by an overwhelming, clinical wall of automated AI text with an immediate drop-off metric overlay.",
+    "Moody, high-contrast overhead shot of an operations desk with two agency dashboards: one showing lightning-fast reply times paired with a declining lead-to-booking conversion graph.",
+    "Sleek screen recording of an automation canvas (n8n/Make) demonstrating an intentional 90-second delay node feeding into CRM history retrieval and prompt-level tone calibration.",
+    "Split-screen comparison of mobile message threads: the left showing sterile AI greetings getting ghosted, the right showing a crisp, casual two-line contextual response triggering an instant 'Booked' notification."
+  ],
+  "used_model": "gemini-3.8-flash",
+  "daily_angle": "What clinics and agencies get wrong about AI speed—and how to automate without sounding like a robot",
+  "date": "2026-11-22"
+}
