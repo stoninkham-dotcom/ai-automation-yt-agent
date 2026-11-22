@@ -36,6 +36,9 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python 03_video.py
 
+      - name: Run 04_edit.py
+        run: python 04_edit.py
+
       - name: Save daily scripts and voiceover to repo
         run: |
           git config user.name "yt-agent-bot"
