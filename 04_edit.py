@@ -52,7 +52,6 @@ def get_video_duration(video_path: str) -> float:
 
 
 def build_smooth_clip_filter(idx: int, seg_dur: float) -> str:
-    # Smooth continuous motion on real video frames without stiff zoompan freeze
     zoom_in = (idx % 2 == 0)
     if zoom_in:
         scale_expr = f"1.0+0.08*(t/{max(0.5, seg_dur)})"
@@ -66,7 +65,7 @@ def build_smooth_clip_filter(idx: int, seg_dur: float) -> str:
         f"fps={FPS},"
         f"scale=w='iw*({scale_expr})':h='ih*({scale_expr})':eval=frame,"
         f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase:eval=frame,"
-        f"crop={OUT_W}:{OUT_H}:x='(iw-{OUT_W})*({pan_x})':y='(ih-{OUT_H})*({pan_y})':eval=frame,"
+        f"crop={OUT_W}:{OUT_H}:x='(iw-{OUT_W})*({pan_x})':y='(ih-{OUT_H})*({pan_y})',"
         f"eq=contrast=1.10:brightness=0.015:saturation=1.16,format=yuv420p"
     )
 
@@ -103,7 +102,6 @@ def render_segment(clip_path: str, start_sec: float, seg_dur: float, out_path: s
 
 
 def generate_fallback_bgm(duration: float, out_bgm: str):
-    # Soft warm low-end pulse/pad so video never feels dead silent
     dur = max(1.0, duration + 1.0)
     filter_complex = (
         f"anoisesrc=color=pink:amplitude=0.04:duration={dur},"
@@ -284,4 +282,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
+    
