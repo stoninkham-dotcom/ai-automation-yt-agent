@@ -2,6 +2,8 @@ name: Test Script Generator
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 14 * * *'
 
 permissions:
   contents: write
@@ -9,6 +11,7 @@ permissions:
 jobs:
   run-script:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -16,12 +19,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install ffmpeg and Python packages
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install google-genai edge-tts pillow
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install --upgrade pip
+          pip install google-genai pillow requests edge-tts moviepy google-api-python-client google-auth google-auth-oauthlib
 
       - name: Run script.py
         env:
@@ -44,19 +49,27 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python 05_meta_thumb.py
 
+      - name: Run 06_upload.py
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY_STATUS: "public"
+        run: python 06_upload.py
+
       - name: Save daily scripts and voiceover to repo
         run: |
-          git config user.name "yt-agent-bot"
-          git config user.email "bot@users.noreply.github.com"
-          git add scripts/
-          git commit -m "Add daily script and voiceover" || echo "No changes"
-          git push
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Auto-save generated assets" || echo "No changes to commit"
+          git push || echo "Nothing to push"
 
       - name: Upload metadata and thumbnail
         uses: actions/upload-artifact@v4
         with:
           name: meta-and-thumbnail
           path: |
-            output/meta/
-            output/thumbnails/
+            output/meta/metadata.json
+            output/thumbnails/thumbnail.jpg
             
