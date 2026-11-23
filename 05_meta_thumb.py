@@ -84,6 +84,24 @@ def make_thumb(headline: str, out_file: Path = THUMB_DIR / "thumbnail.jpg") -> P
         box = draw.textbbox((0, 0), l, font=font)
         x = (w - (box[2] - box[0])) // 2
         y = start_y + i * 110
+        color = (255, 205, 65) if i == len(lines) - 1 else (255, 255, 255)
         draw.text((x + 4, y + 4), l, font=font, fill=(0, 0, 0))
-        draw.text((x, y), l,
-  
+        draw.text((x, y), l, font=font, fill=color)
+
+    img.save(out_file, "JPEG", quality=92)
+    return out_file
+
+
+def main():
+    ctx = get_context()
+    meta = make_meta(ctx)
+    thumb = make_thumb(meta["thumb_text"])
+    meta["thumbnail_path"] = str(thumb)
+    out_json = META_DIR / "metadata.json"
+    out_json.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    print("Saved:", out_json, "and", thumb)
+
+
+if __name__ == "__main__":
+    main()
+    
