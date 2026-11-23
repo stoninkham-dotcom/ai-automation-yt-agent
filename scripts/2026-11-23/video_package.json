@@ -1,0 +1,14 @@
+{
+  "title": "How AI Voice Agents Turn Missed Calls Into Revenue",
+  "description": "Discover how high-performing service businesses use autonomous AI voice agents to convert missed after-hours calls into instant calendar bookings without extra ad spend.",
+  "narration": "Your business isn’t losing clients to cheaper competitors. You’re losing them to voicemail at 5:15 PM.\n\nHere’s the brutal math: over sixty percent of high-intent service calls go straight to an empty desk. And when someone needs a plumber, a lawyer, or an emergency contractor, they don't leave a message. They just click the next name on Google.\n\nMost owners try to fix this by burning thousands more on ads. That’s like pouring water into a leaky bucket.\n\nThe high-ROI fix isn't buying more leads or hiring weekend staff. It's deploying a real-time, voice-to-calendar agent. Not those awful 'press 1 for sales' robocalls. We're talking low-latency AI that answers on the second ring, converses like a human, qualifies the client's emergency, and writes the booking straight into your calendar.\n\nReal-world proof: an HVAC client in Ohio enabled this flow last month. They captured 38 booked jobs after-hours in thirty days—zero extra ad spend, zero late-night staff.\n\nThe lesson is simple: stop buying new leads until your business can actually capture the ones already calling. Fix the front door first.",
+  "scenes": [
+    "Cinematic close-up of a glowing smartphone ringing unattended on an empty office desk at dusk, shifting to an unread voicemail notification.",
+    "Sleek macro UI visualization showing voice frequency waveforms connecting directly into an auto-filling calendar integration screen.",
+    "Dynamic dashboard screen capture showcasing an after-hours spike in booked appointments and converted revenue metrics.",
+    "High-contrast motion graphic of a leaky funnel sealing shut, replaced by an efficient digital workflow routing leads directly to confirmed slots."
+  ],
+  "used_model": "gemini-3.5-flash",
+  "daily_angle": "From missed calls to booked calendars: a practical breakdown of high-ROI AI operations for service businesses",
+  "date": "2026-11-23"
+}
