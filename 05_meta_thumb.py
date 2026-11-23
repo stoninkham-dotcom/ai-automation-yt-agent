@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 from google import genai
 from PIL import Image, ImageDraw, ImageFont
@@ -11,9 +12,10 @@ THUMB_DIR.mkdir(parents=True, exist_ok=True)
 
 GEMINI_MODELS = [
     "gemini-3.8-flash",
+    "gemini-3.8-flash-lite",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
 ]
 
 
@@ -33,15 +35,18 @@ def get_context():
 def generate_with_fallback(client: genai.Client, prompt: str) -> str:
     last_error = None
     for model_name in GEMINI_MODELS:
-        try:
-            print(f"Trying Gemini model: {model_name}")
-            res = client.models.generate_content(model=model_name, contents=prompt)
-            if res and res.text:
-                print(f"Success with model: {model_name}")
-                return res.text.strip()
-        except Exception as e:
-            print(f"Model {model_name} failed: {e}")
-            last_error = e
+        for attempt in range(2):
+            try:
+                print(f"Trying Gemini model: {model_name} (attempt {attempt + 1})")
+                res = client.models.generate_content(model=model_name, contents=prompt)
+                if res and res.text:
+                    print(f"Success with model: {model_name}")
+                    return res.text.strip()
+            except Exception as e:
+                print(f"Model {model_name} attempt {attempt + 1} failed: {e}")
+                last_error = e
+                if attempt == 0:
+                    time.sleep(3)
     raise RuntimeError(f"All Gemini models failed. Last error: {last_error}")
 
 
@@ -125,4 +130,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
+    
