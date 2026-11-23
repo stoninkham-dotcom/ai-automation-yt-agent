@@ -1,8 +1,8 @@
 import json
 import os
-import time
 from pathlib import Path
 from google import genai
+from google.genai import types
 from PIL import Image, ImageDraw, ImageFont
 
 META_DIR = Path("output/meta")
@@ -15,7 +15,6 @@ GEMINI_MODELS = [
     "gemini-3.8-flash-lite",
     "gemini-3.7-flash",
     "gemini-3.5-flash",
-    "gemini-2.5-flash",
 ]
 
 
@@ -32,26 +31,28 @@ def get_context():
     }
 
 
-def generate_with_fallback(client: genai.Client, prompt: str) -> str:
-    last_error = None
-    for model_name in GEMINI_MODELS:
-        for attempt in range(2):
-            try:
-                print(f"Trying Gemini model: {model_name} (attempt {attempt + 1})")
-                res = client.models.generate_content(model=model_name, contents=prompt)
-                if res and res.text:
-                    print(f"Success with model: {model_name}")
-                    return res.text.strip()
-            except Exception as e:
-                print(f"Model {model_name} attempt {attempt + 1} failed: {e}")
-                last_error = e
-                if attempt == 0:
-                    time.sleep(3)
-    raise RuntimeError(f"All Gemini models failed. Last error: {last_error}")
+def fallback_meta(ctx: dict) -> dict:
+    topic = str(ctx.get("topic") or "Daily Focus Habit").strip()
+    short_topic = topic[:38]
+    return {
+        "title": f"{short_topic} #Shorts"[:65],
+        "description": f"Simple daily shift for {short_topic.lower()}. Try it today and stay consistent.\n#Shorts #DailyHabits #Mindset",
+        "keywords": ["daily habits", "focus", "productivity", "mindset", "morning routine", "discipline", "self improvement", "shorts"],
+        "hashtags": ["#Shorts", "#DailyHabits", "#Mindset"],
+        "thumb_text": short_topic[:28] or "Watch This Today",
+    }
 
 
 def make_meta(ctx: dict) -> dict:
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        print("No GEMINI_API_KEY found, using local fallback metadata.")
+        return fallback_meta(ctx)
+
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=15000),
+    )
     prompt = f"""
     Write natural, human-sounding YouTube Shorts metadata for US/UK viewers from this context:
     {json.dumps(ctx, ensure_ascii=False)}
@@ -66,21 +67,31 @@ def make_meta(ctx: dict) -> dict:
       "hashtags" (list of 3-4 tags starting with '#'),
       "thumb_text" (3 to 5 bold words).
     """
-    text = generate_with_fallback(client, prompt)
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    data = json.loads(text)
 
-    return {
-        "title": str(data.get("title", "Quick Habit Shift #Shorts")).strip()[:100],
-        "description": str(data.get("description", "")).strip(),
-        "keywords": [str(k).lstrip("#").strip() for k in data.get("keywords", []) if str(k).strip()][:10],
-        "hashtags": [
-            (str(h).strip() if str(h).strip().startswith("#") else "#" + str(h).strip())
-            for h in data.get("hashtags", ["#Shorts"])
-        ][:4],
-        "thumb_text": str(data.get("thumb_text", "Watch This Today")).strip(),
-    }
+    for model_name in GEMINI_MODELS:
+        try:
+            print(f"Trying {model_name} (15s timeout)...")
+            res = client.models.generate_content(model=model_name, contents=prompt)
+            text = (res.text or "").strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            data = json.loads(text)
+            print(f"Metadata generated using {model_name}")
+            return {
+                "title": str(data.get("title", "Quick Habit Shift #Shorts")).strip()[:100],
+                "description": str(data.get("description", "")).strip(),
+                "keywords": [str(k).lstrip("#").strip() for k in data.get("keywords", []) if str(k).strip()][:10],
+                "hashtags": [
+                    (str(h).strip() if str(h).strip().startswith("#") else "#" + str(h).strip())
+                    for h in data.get("hashtags", ["#Shorts"])
+                ][:4],
+                "thumb_text": str(data.get("thumb_text", "Watch This Today")).strip(),
+            }
+        except Exception as e:
+            print(f"Skipping {model_name}: {e}")
+
+    print("All Gemini models timed out/failed; using fast fallback metadata.")
+    return fallback_meta(ctx)
 
 
 def make_thumb(headline: str, out_file: Path = THUMB_DIR / "thumbnail.jpg") -> Path:
