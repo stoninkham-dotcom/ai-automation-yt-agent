@@ -9,6 +9,13 @@ THUMB_DIR = Path("output/thumbnails")
 META_DIR.mkdir(parents=True, exist_ok=True)
 THUMB_DIR.mkdir(parents=True, exist_ok=True)
 
+GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+]
+
 
 def get_context():
     for path in [Path("output/script_data.json"), Path("script_output.json")]:
@@ -21,6 +28,21 @@ def get_context():
         "topic": "Daily focus and habit",
         "script": os.environ.get("VIDEO_SCRIPT", ""),
     }
+
+
+def generate_with_fallback(client: genai.Client, prompt: str) -> str:
+    last_error = None
+    for model_name in GEMINI_MODELS:
+        try:
+            print(f"Trying Gemini model: {model_name}")
+            res = client.models.generate_content(model=model_name, contents=prompt)
+            if res and res.text:
+                print(f"Success with model: {model_name}")
+                return res.text.strip()
+        except Exception as e:
+            print(f"Model {model_name} failed: {e}")
+            last_error = e
+    raise RuntimeError(f"All Gemini models failed. Last error: {last_error}")
 
 
 def make_meta(ctx: dict) -> dict:
@@ -39,8 +61,7 @@ def make_meta(ctx: dict) -> dict:
       "hashtags" (list of 3-4 tags starting with '#'),
       "thumb_text" (3 to 5 bold words).
     """
-    res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    text = res.text.strip()
+    text = generate_with_fallback(client, prompt)
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     data = json.loads(text)
@@ -104,4 +125,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+            
