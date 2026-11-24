@@ -1,0 +1,14 @@
+{
+  "title": "Why \"Set and Forget\" AI Fails (And What Works)",
+  "description": "Most AI automations fail silently due to model drift and unhandled edge cases. Here is how top AI engineers design self-healing workflows with schema validation, fallback routing, and human-in-the-loop triaging.",
+  "narration": "The moment you set an AI automation and walk away, it starts dying. Not with a loud error code, but silently. An API update changes a JSON key. A customer submits an unexpected edge case. Your LLM hallucinates a field that doesn't exist. Suddenly, corrupted data is leaking straight into your database—and you won't notice until a client complains three weeks later. This is why amateur builders obsess over prompts, while real AI operators design self-healing systems. A self-healing automation expects failure. First, it enforces strict schema validation at every single step. If the output drifts, it rejects it instantly. Second, it uses automated fallback routing. If your primary model rate-limits or returns malformed text, the system automatically downshifts to a secondary model or retries with a self-correcting prompt. And if all retries fail? It doesn't crash the pipeline. It packages the raw payload, flags the exact point of failure, and drops it into a quiet human-in-the-loop queue. That is how top tech teams run millions of operations without getting paged at 2 AM. Stop building for the happy path. If your workflow can't fix its own chaos, you didn't build an automation—you built technical debt.",
+  "scenes": [
+    "Macro close-up of a terminal screen showing an undetected silent error stream scrolling in red text, transitioning to a database interface populating with corrupted entries.",
+    "High-tech 3D motion graphic illustrating a data payload failing a schema check, glowing red, then instantly auto-rerouting through a secondary fallback logic node that turns blue.",
+    "Clean overhead shot of a streamlined modern operator dashboard organizing flagged edge-case payloads into an elegant human triage queue without interrupting the main pipeline.",
+    "Cinematic shot of a sleek workstation running real-time green activity graphs, representing an ultra-reliable self-healing production system operating quietly at scale."
+  ],
+  "used_model": "gemini-3.5-flash",
+  "daily_angle": "Why 'set and forget' AI breaks—and how real operators design self-healing automations that scale quietly",
+  "date": "2026-11-24"
+}
