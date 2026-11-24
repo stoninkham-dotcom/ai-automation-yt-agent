@@ -11,6 +11,7 @@ permissions:
 jobs:
   run-script:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -22,34 +23,41 @@ jobs:
           python-version: '3.11'
 
       - name: Install ffmpeg and Python packages
+        timeout-minutes: 5
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          pip install --upgrade pip
-          pip install google-genai pillow requests edge-tts moviepy google-api-python-client google-auth google-auth-oauthlib
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          pip install --upgrade pip -q
+          pip install -q google-genai pillow requests edge-tts google-api-python-client google-auth
 
       - name: Run script.py
+        timeout-minutes: 3
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python script.py
 
       - name: Run 02_voice.py
+        timeout-minutes: 3
         run: python 02_voice.py
 
       - name: Run 03_video.py
+        timeout-minutes: 3
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python 03_video.py
 
       - name: Run 04_edit.py
+        timeout-minutes: 5
         run: python 04_edit.py
 
       - name: Run 05_meta_thumb.py
+        timeout-minutes: 3
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python 05_meta_thumb.py
 
       - name: Run 06_upload.py
+        timeout-minutes: 3
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
@@ -58,6 +66,7 @@ jobs:
         run: python 06_upload.py
 
       - name: Save daily scripts and voiceover to repo
+        timeout-minutes: 2
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
