@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import datetime
 import json
 import os
@@ -52,35 +53,91 @@ Strict quality & retention rules:
   "scenes" (list of 4 distinct visual b-roll/scene prompts matching the script beats).
 """
 
+PER_MODEL_TIMEOUT_SEC = 20
+
+
+def _call_model_once(model_name: str, prompt_text: str) -> str:
+    resp = client.models.generate_content(
+        model=model_name,
+        contents=prompt_text,
+    )
+    return (resp.text or "").strip() if resp else ""
+
+
+def parse_json_safely(raw_text: str) -> dict:
+    cleaned = raw_text.strip()
+    if "```" in cleaned:
+        parts = cleaned.split("```")
+        for part in parts:
+            candidate = part.strip()
+            if candidate.lower().startswith("json"):
+                candidate = candidate[4:].strip()
+            if candidate.startswith("{") and candidate.endswith("}"):
+                cleaned = candidate
+                break
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start : end + 1]
+    parsed = json.loads(cleaned)
+    if not isinstance(parsed, dict):
+        raise ValueError("JSON root is not an object")
+    return parsed
+
+
+def build_fallback_package(topic: str) -> dict:
+    narration = (
+        "Most AI automations don't fail because the model is weak. They fail because the handoff is messy. "
+        "A lead messages at nine at night, gets a generic wall of text, and still waits until morning for a real reply. "
+        "Meanwhile, the team has to clean up broken data across three tools before anyone books a slot. "
+        "Fix the workflow first. Capture the exact intent, confirm the time window clearly, and route only qualified requests to humans. "
+        "When the system handles the repetitive intake cleanly, response time drops from hours to seconds without sounding robotic. "
+        "Keep it simple, test the edge cases, and let calm automation carry the routine work."
+    )
+    return {
+        "title": "Why Most AI Workflows Break Fast",
+        "description": "How clean intake and reliable routing beat overcomplicated AI setups for daily operations.",
+        "narration": narration,
+        "scenes": [
+            "Modern operations desk at night with calm amber monitor lighting and clean workflow notes, moody cinematic b-roll",
+            "Close-up of hands typing a clear schedule confirmation on a laptop in a quiet minimalist office, natural light",
+            "Fast-paced montage of incoming messages being sorted neatly into a structured queue, crisp editorial style",
+            "Confident operator reviewing a smooth calendar schedule in the morning, clean high-contrast framing",
+        ],
+    }
+
 
 def generate_with_fallback(prompt_text: str):
-    errors = []
     for model_name in MODELS_TO_TRY:
+        print(f"Trying model: {model_name} (timeout={PER_MODEL_TIMEOUT_SEC}s)...")
+        executor = ThreadPoolExecutor(max_workers=1)
         try:
-            print(f"Trying model: {model_name}...")
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=prompt_text,
-            )
-            if resp and resp.text:
-                print(f"Success with model: {model_name}")
-                return resp.text.strip(), model_name
+            future = executor.submit(_call_model_once, model_name, prompt_text)
+            raw_text = future.result(timeout=PER_MODEL_TIMEOUT_SEC)
+            if raw_text:
+                parsed = parse_json_safely(raw_text)
+                if parsed.get("narration") and parsed.get("title"):
+                    print(f"Success with model: {model_name}")
+                    return parsed, model_name
+            print(f"{model_name} returned empty/invalid output, moving to next model.")
+        except FuturesTimeoutError:
+            print(f"{model_name} timed out after {PER_MODEL_TIMEOUT_SEC}s, skipping fast.")
+            executor.shutdown(wait=False, cancel_futures=True)
         except Exception as exc:
-            msg = f"{model_name} failed -> {exc}"
-            print(msg)
-            errors.append(msg)
-    raise RuntimeError("Koi bhi Gemini model kaam nahi kiya:\n" + "\n".join(errors))
+            print(f"{model_name} failed -> {exc}")
+            executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            executor.shutdown(wait=False)
+
+    print("All Gemini models timed out or failed; using local fallback script.")
+    return build_fallback_package(TODAY_TOPIC), "local-fallback"
 
 
-raw, used_model = generate_with_fallback(PROMPT)
+data, used_model = generate_with_fallback(PROMPT)
 
-if raw.startswith("```"):
-    raw = raw.split("```", 2)[1]
-    if raw.startswith("json"):
-        raw = raw[4:]
-    raw = raw.strip()
+if not isinstance(data.get("scenes"), list) or len(data["scenes"]) == 0:
+    data["scenes"] = build_fallback_package(TODAY_TOPIC)["scenes"]
 
-data = json.loads(raw)
 data["used_model"] = used_model
 data["daily_angle"] = TODAY_TOPIC
 data["date"] = date_folder
@@ -92,7 +149,7 @@ with open(package_path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 
 with open(narration_path, "w", encoding="utf-8") as f:
-    f.write(data["narration"].strip())
+    f.write(str(data["narration"]).strip())
 
 print("USED MODEL:", used_model)
 print("DATE FOLDER:", out_dir)
