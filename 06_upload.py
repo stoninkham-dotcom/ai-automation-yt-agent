@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import sys
@@ -8,30 +9,52 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-META_FILE = Path("output/meta/metadata.json")
 THUMB_FILE = Path("output/thumbnails/thumbnail.jpg")
 
-VIDEO_CANDIDATES = [
-    Path("output/final_video.mp4"),
-    Path("output/short.mp4"),
-    Path("output/video.mp4"),
-    Path("output/edited.mp4"),
-]
+
+def get_today_str() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
 
 
 def find_video_file() -> Path | None:
-    for p in VIDEO_CANDIDATES:
+    today = get_today_str()
+    candidates = [
+        Path("scripts") / today / "final_short.mp4",
+        Path("scripts") / today / "final_video.mp4",
+        Path("output/final_video.mp4"),
+        Path("output/short.mp4"),
+        Path("output/video.mp4"),
+        Path("output/edited.mp4"),
+    ]
+    for p in candidates:
         if p.exists() and p.stat().st_size > 0:
             return p
-    output_dir = Path("output")
-    if output_dir.exists():
-        mp4s = sorted(
-            [p for p in output_dir.rglob("*.mp4") if p.stat().st_size > 0],
-            key=lambda x: x.stat().st_mtime,
-            reverse=True,
-        )
-        if mp4s:
-            return mp4s[0]
+
+    for search_root in [Path("scripts"), Path("output")]:
+        if search_root.exists():
+            mp4s = sorted(
+                [
+                    p
+                    for p in search_root.rglob("*.mp4")
+                    if p.stat().st_size > 0 and "_edit_tmp" not in p.parts
+                ],
+                key=lambda x: x.stat().st_mtime,
+                reverse=True,
+            )
+            if mp4s:
+                return mp4s[0]
+    return None
+
+
+def find_metadata_file() -> Path | None:
+    today = get_today_str()
+    candidates = [
+        Path("output/meta/metadata.json"),
+        Path("scripts") / today / "metadata.json",
+    ]
+    for p in candidates:
+        if p.exists() and p.stat().st_size > 0:
+            return p
     return None
 
 
@@ -56,18 +79,19 @@ def get_youtube_service():
 
 
 def load_metadata() -> dict:
-    if META_FILE.exists():
+    meta_file = find_metadata_file()
+    if meta_file and meta_file.exists():
         try:
-            return json.loads(META_FILE.read_text(encoding="utf-8"))
+            return json.loads(meta_file.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"Warning: could not parse metadata.json: {e}")
+            print(f"Warning: could not parse {meta_file}: {e}")
     return {}
 
 
 def main():
     video_path = find_video_file()
     if not video_path:
-        print("Error: No rendered .mp4 video found in output/.")
+        print("Error: No rendered .mp4 video found in scripts/ or output/.")
         sys.exit(1)
 
     meta = load_metadata()
@@ -124,9 +148,9 @@ def main():
             ).execute()
             print(f"Thumbnail set from: {thumb_path}")
         except Exception as e:
-            print(f"Warning: could not set custom thumbnail (normal if channel/Shorts restriction applies): {e}")
+            print(f"Warning: could not set custom thumbnail: {e}")
 
 
 if __name__ == "__main__":
     main()
-      
+    
