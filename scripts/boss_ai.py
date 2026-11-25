@@ -21,17 +21,34 @@ BLOCKED_PATHS = (
 )
 
 
-def gh_get(url):
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {TOKEN}",
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "gemini-boss-ai",
-        },
-    )
+def gh_request(url, method="GET", payload=None):
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "gemini-boss-ai",
+    }
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        raw = resp.read().decode("utf-8")
+        return json.loads(raw) if raw.strip() else {}
+
+
+def trigger_workflow(workflow_id_or_file, ref="main"):
+    if not (REPO and TOKEN and workflow_id_or_file):
+        return False, "Workflow trigger ke liye repo/token missing hai."
+    url = (
+        f"https://api.github.com/repos/{REPO}/actions/workflows/"
+        f"{workflow_id_or_file}/dispatches"
+    )
+    try:
+        gh_request(url, method="POST", payload={"ref": ref})
+        return True, f"Workflow ({workflow_id_or_file}) ko {ref} par dobara start kar diya."
+    except Exception as exc:
+        return False, f"Workflow dobara start nahi ho saka: {exc}"
 
 
 def ask_gemini(prompt, response_mime_type="text/plain"):
@@ -166,7 +183,7 @@ def write_outputs(now_str, latest, error_occurred, boss_statement):
     dashboard_content = (
         "# Gemini Boss Dashboard\n\n"
         f"## Aaj Ka Status ({now_str})\n"
-        "- **Mode:** 24/7 Watchdog + Auto-Fix\n"
+        "- **Mode:** 24/7 Watchdog + Auto-Fix + Auto-Rerun\n"
         f"- **Latest Run:** {run_label}\n"
         f"- **Error Aaya?** {error_line}\n"
         f"- **Gemini:** {boss_statement}\n"
@@ -193,15 +210,23 @@ def main():
     boss_statement = "Sab normal hai; koi fix zaroori nahi."
 
     if REPO and TOKEN:
-        runs = gh_get(f"https://api.github.com/repos/{REPO}/actions/runs?per_page=5").get(
-            "workflow_runs", []
-        )
-        latest = runs[0] if runs else None
+        runs = gh_request(
+            f"https://api.github.com/repos/{REPO}/actions/runs?per_page=10"
+        ).get("workflow_runs", [])
 
-        if latest and latest.get("conclusion") not in (None, "success", "skipped"):
+        other_runs = [
+            r for r in runs if r.get("path") != ".github/workflows/boss_monitor.yml"
+        ]
+        latest = other_runs[0] if other_runs else (runs[0] if runs else None)
+
+        if (
+            latest
+            and latest.get("path") != ".github/workflows/boss_monitor.yml"
+            and latest.get("conclusion") not in (None, "success", "skipped")
+        ):
             error_occurred = True
             run_id = latest["id"]
-            jobs = gh_get(
+            jobs = gh_request(
                 f"https://api.github.com/repos/{REPO}/actions/runs/{run_id}/jobs"
             ).get("jobs", [])
             for job in jobs:
@@ -211,7 +236,14 @@ def main():
 
             fixed, details = try_auto_fix(latest, failed_steps)
             if fixed:
-                boss_statement = f"Is error ko maine fix kiya hai: {details}"
+                wf_path = latest.get("path") or str(latest.get("workflow_id") or "")
+                branch = latest.get("head_branch") or "main"
+                rerun_ok, rerun_msg = trigger_workflow(wf_path, ref=branch)
+                boss_statement = (
+                    f"Is error ko maine fix kiya hai: {details}. {rerun_msg}"
+                    if rerun_ok
+                    else f"Is error ko maine fix kiya hai: {details} ({rerun_msg})"
+                )
             else:
                 boss_statement = f"Error aaya hai: {details}"
 
@@ -234,3 +266,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+            
