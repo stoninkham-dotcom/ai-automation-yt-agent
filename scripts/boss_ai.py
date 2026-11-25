@@ -79,18 +79,51 @@ def gh_request(url, method="GET", payload=None, retries=3):
     raise last_exc
 
 
-def trigger_workflow(workflow_id_or_file, ref="main"):
+def trigger_workflow(workflow_id_or_file, ref="main", fallback_ref="main"):
     if not (REPO and TOKEN and workflow_id_or_file):
         return False, "Workflow trigger ke liye repo/token missing hai."
-    url = (
-        f"https://api.github.com/repos/{REPO}/actions/workflows/"
-        f"{workflow_id_or_file}/dispatches"
+
+    candidates = []
+    if isinstance(workflow_id_or_file, (list, tuple)):
+        for item in workflow_id_or_file:
+            if item is not None and str(item).strip():
+                s = str(item).strip()
+                if s not in candidates:
+                    candidates.append(s)
+                base = os.path.basename(s)
+                if base and base not in candidates:
+                    candidates.append(base)
+    else:
+        s = str(workflow_id_or_file).strip()
+        if s:
+            candidates.append(s)
+            base = os.path.basename(s)
+            if base and base not in candidates:
+                candidates.append(base)
+
+    branches = []
+    for br in (ref, fallback_ref, "main", "master"):
+        if br and br not in branches:
+            branches.append(br)
+
+    last_exc = None
+    for wf_key in candidates:
+        for br in branches:
+            url = (
+                f"https://api.github.com/repos/{REPO}/actions/workflows/"
+                f"{wf_key}/dispatches"
+            )
+            try:
+                gh_request(url, method="POST", payload={"ref": br})
+                return True, f"Workflow ({wf_key}) ko {br} par auto-rerun trigger kar diya."
+            except Exception as exc:
+                last_exc = exc
+                continue
+
+    return (
+        False,
+        f"Workflow auto-rerun trigger fail ({last_exc}). Check karein ke workflow mein workflow_dispatch ho aur GH_PAT ko workflow permission mili ho.",
     )
-    try:
-        gh_request(url, method="POST", payload={"ref": ref})
-        return True, f"Workflow ({workflow_id_or_file}) ko {ref} par auto-rerun trigger kar diya."
-    except Exception as exc:
-        return False, f"Workflow auto-rerun trigger fail: {exc}"
 
 
 def discover_gemini_models():
@@ -377,7 +410,6 @@ def main():
         ]
         latest = other_runs[0] if other_runs else (runs[0] if runs else None)
 
-        # Sabse recent failed run check karo (sirf latest agar fail ho toh)
         if (
             latest
             and latest.get("path") != ".github/workflows/boss_monitor.yml"
@@ -391,9 +423,14 @@ def main():
             if fixed:
                 prev_reruns = int(rerun_counts.get(run_id, 0))
                 if prev_reruns < MAX_RERUNS_PER_RUN_ID:
-                    wf_path = latest.get("path") or str(latest.get("workflow_id") or "")
+                    wf_targets = [
+                        latest.get("workflow_id"),
+                        latest.get("path"),
+                    ]
                     branch = latest.get("head_branch") or "main"
-                    rerun_ok, rerun_msg = trigger_workflow(wf_path, ref=branch)
+                    rerun_ok, rerun_msg = trigger_workflow(
+                        wf_targets, ref=branch, fallback_ref="main"
+                    )
                     if rerun_ok:
                         rerun_counts[run_id] = prev_reruns + 1
                         state["rerun_counts"] = rerun_counts
@@ -427,4 +464,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-                
