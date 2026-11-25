@@ -12,6 +12,13 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 DAILY_LOG_PATH = "reports/daily_log.md"
 GEMINI_DASHBOARD_PATH = "gemini_boss/dashboard.md"
 
+GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+]
+
 ALLOWED_FIX_EXTENSIONS = (".py", ".yml", ".yaml", ".json", ".toml", ".sh")
 BLOCKED_PATHS = (
     ".github/workflows/boss_monitor.yml",
@@ -54,10 +61,7 @@ def trigger_workflow(workflow_id_or_file, ref="main"):
 def ask_gemini(prompt, response_mime_type="text/plain"):
     if not GEMINI_KEY:
         return ""
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
-    )
+
     generation_config = {}
     if response_mime_type == "application/json":
         generation_config["responseMimeType"] = "application/json"
@@ -66,20 +70,39 @@ def ask_gemini(prompt, response_mime_type="text/plain"):
     if generation_config:
         payload["generationConfig"] = generation_config
 
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+    body = json.dumps(payload).encode("utf-8")
+    last_error = None
 
-    candidates = data.get("candidates", [])
-    if not candidates:
-        return ""
-    parts = candidates[0].get("content", {}).get("parts", [])
-    return "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+    for model_name in GEMINI_MODELS:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model_name}:generateContent?key={GEMINI_KEY}"
+        )
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            candidates = data.get("candidates", [])
+            if not candidates:
+                continue
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+            if text:
+                print(f"Gemini Boss responded using model: {model_name}")
+                return text
+        except Exception as exc:
+            last_error = exc
+            print(f"Model {model_name} failed ({exc}), trying next model...")
+            continue
+
+    if last_error:
+        print(f"All Gemini models failed. Last error: {last_error}")
+    return ""
 
 
 def list_repo_files():
@@ -266,4 +289,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
