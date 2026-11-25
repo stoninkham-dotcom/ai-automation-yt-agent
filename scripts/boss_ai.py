@@ -314,7 +314,6 @@ def fetch_failed_steps_and_logs(run_id):
     except Exception as exc:
         log_chunks.append(f"Jobs fetch warning: {exc}")
 
-    # Download run logs zip to extract real traceback/error lines
     try:
         zip_bytes = gh_download_bytes(
             f"https://api.github.com/repos/{REPO}/actions/runs/{run_id}/logs"
@@ -543,4 +542,6 @@ def main():
     subprocess.run(["git", "config", "user.name", "gemini-boss-ai"], check=False)
     subprocess.run(
         ["git", "config", "user.email", "gemini-boss-ai@users.noreply.github.com"],
-        check=Fal
+        check=False,
+    )
+    subprocess.run(["git", "add", "."], check=False)
