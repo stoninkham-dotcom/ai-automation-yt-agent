@@ -1,5 +1,6 @@
 import json
 import os
+import datetime
 from pathlib import Path
 from google import genai
 from google.genai import types
@@ -11,14 +12,21 @@ META_DIR.mkdir(parents=True, exist_ok=True)
 THUMB_DIR.mkdir(parents=True, exist_ok=True)
 
 GEMINI_MODELS = [
-    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
 ]
 
 
 def get_context():
-    for path in [Path("output/script_data.json"), Path("script_output.json")]:
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    today_str = now_utc.strftime("%Y-%m-%d")
+    
+    candidates = [
+        Path("scripts") / today_str / "video_package.json",
+        Path("output/script_data.json"),
+        Path("script_output.json"),
+    ]
+    for path in candidates:
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
@@ -50,7 +58,7 @@ def make_meta(ctx: dict) -> dict:
 
     client = genai.Client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=15000),
+        http_options=types.HttpOptions(timeout=60),
     )
     prompt = f"""
     Write natural, human-sounding YouTube Shorts metadata for US/UK viewers from this context:
@@ -60,16 +68,16 @@ def make_meta(ctx: dict) -> dict:
     - Never mention AI, bots, or automation.
     - Keep tone human, direct, and engaging.
     - Return ONLY JSON with keys:
-      "title" (under 65 chars, include #Shorts),
-      "description" (2 short lines + 3 hashtags),
-      "keywords" (list of 8-10 words without '#'),
-      "hashtags" (list of 3-4 tags starting with '#'),
-      "thumb_text" (3 to 5 bold words).
+      \"title\" (under 65 chars, include #Shorts),
+      \"description\" (2 short lines + 3 hashtags),
+      \"keywords\" (list of 8-10 words without '#'),
+      \"hashtags\" (list of 3-4 tags starting with '#'),
+      \"thumb_text\" (3 to 5 bold words).
     """
 
     for model_name in GEMINI_MODELS:
         try:
-            print(f"Trying {model_name} (15s timeout)...")
+            print(f"Trying {model_name} (60s timeout)...")
             res = client.models.generate_content(model=model_name, contents=prompt)
             text = (res.text or "").strip()
             if text.startswith("```"):
