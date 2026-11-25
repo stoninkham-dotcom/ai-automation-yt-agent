@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+From concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import datetime
 import json
 import os
