@@ -36,7 +36,7 @@ BLOCKED_PATHS = (
     "reports/daily_log.md",
 )
 
-MAX_RERUNS_PER_RUN_ID = 2
+MAX_RERUNS_PER_KEY = 3
 
 
 def load_state():
@@ -94,6 +94,21 @@ def gh_download_bytes(url, timeout=45):
         return resp.read()
 
 
+def get_latest_workflow_run_id(workflow_id):
+    if not (REPO and TOKEN and workflow_id):
+        return None
+    try:
+        res = gh_request(
+            f"https://api.github.com/repos/{REPO}/actions/workflows/{workflow_id}/runs?per_page=1"
+        )
+        runs = res.get("workflow_runs", [])
+        if runs:
+            return runs[0].get("id")
+    except Exception:
+        pass
+    return None
+
+
 def trigger_workflow(workflow_id_or_file, ref="main", fallback_ref="main"):
     if not (REPO and TOKEN and workflow_id_or_file):
         return False, "Workflow trigger ke liye repo/token missing hai."
@@ -118,6 +133,14 @@ def trigger_workflow(workflow_id_or_file, ref="main", fallback_ref="main"):
         if br and br not in branches:
             branches.append(br)
 
+    numeric_wf_id = None
+    for c in candidates:
+        if c.isdigit():
+            numeric_wf_id = c
+            break
+
+    before_top_id = get_latest_workflow_run_id(numeric_wf_id) if numeric_wf_id else None
+
     last_exc = None
     for wf_key in candidates:
         for br in branches:
@@ -126,15 +149,24 @@ def trigger_workflow(workflow_id_or_file, ref="main", fallback_ref="main"):
                 f"{wf_key}/dispatches"
             )
             try:
-                gh_request(url, method="POST", payload={"ref": br})
-                return True, f"Workflow ({wf_key}) ko {br} par auto-rerun trigger kar diya."
+                gh_request(url, method="POST", payload={"ref": br, "inputs": {}})
+                time.sleep(3)
+                after_top_id = (
+                    get_latest_workflow_run_id(numeric_wf_id) if numeric_wf_id else None
+                )
+                if numeric_wf_id and before_top_id and after_top_id == before_top_id:
+                    return (
+                        False,
+                        f"Dispatch API OK aayi lekin {wf_key} ({br}) ka naya run start nahi hua (check workflow conditions/concurrency/permissions).",
+                    )
+                return True, f"Workflow ({wf_key}) ka naya run {br} par start ho gaya."
             except Exception as exc:
                 last_exc = exc
                 continue
 
     return (
         False,
-        f"Workflow auto-rerun trigger fail ({last_exc}). Check karein ke workflow mein workflow_dispatch ho aur GH_PAT ko workflow permission mili ho.",
+        f"Workflow run start nahi ho saka ({last_exc}). Check karein ke workflow mein workflow_dispatch ho aur GH_PAT ko workflow permission mili ho.",
     )
 
 
@@ -464,7 +496,7 @@ def write_outputs(now_str, latest, error_occurred, boss_statement):
     dashboard_content = (
         "# Gemini Boss Dashboard\n\n"
         f"## Live Status ({now_str})\n"
-        "- **Mode:** 24/7 News Pipeline Watchdog + Log-Aware Auto-Fix + Loop-Guarded Auto-Rerun\n"
+        "- **Mode:** 24/7 News Pipeline Watchdog + Verified Auto-Rerun\n"
         f"- **Latest Target Run:** {run_label}\n"
         f"- **Status:** {error_line}\n"
         f"- **Gemini Boss:** {boss_statement}\n"
@@ -481,6 +513,22 @@ def write_outputs(now_str, latest, error_occurred, boss_statement):
     )
     with open(DAILY_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(daily_entry)
+
+
+def git_push_if_changed(now_str):
+    subprocess.run(["git", "config", "user.name", "gemini-boss-ai"], check=False)
+    subprocess.run(
+        ["git", "config", "user.email", "gemini-boss-ai@users.noreply.github.com"],
+        check=False,
+    )
+    subprocess.run(["git", "add", "."], check=False)
+    diff = subprocess.run(["git", "diff", "--cached", "--quiet"])
+    if diff.returncode != 0:
+        subprocess.run(
+            ["git", "commit", "-m", f"chore(gemini-boss): {now_str}"],
+            check=False,
+        )
+        subprocess.run(["git", "push"], check=False)
 
 
 def main():
@@ -508,40 +556,4 @@ def main():
             and latest.get("conclusion") not in (None, "success", "skipped", "cancelled")
         ):
             error_occurred = True
-            run_id = str(latest.get("id"))
-            failed_steps, log_snippet = fetch_failed_steps_and_logs(run_id)
-            fixed, details = try_auto_fix(latest, failed_steps, log_snippet)
-
-            if fixed:
-                prev_reruns = int(rerun_counts.get(run_id, 0))
-                if prev_reruns < MAX_RERUNS_PER_RUN_ID:
-                    wf_targets = [
-                        latest.get("workflow_id"),
-                        latest.get("path"),
-                    ]
-                    branch = latest.get("head_branch") or "main"
-                    rerun_ok, rerun_msg = trigger_workflow(
-                        wf_targets, ref=branch, fallback_ref="main"
-                    )
-                    if rerun_ok:
-                        rerun_counts[run_id] = prev_reruns + 1
-                        state["rerun_counts"] = rerun_counts
-                        state["last_fixed_run_id"] = run_id
-                    boss_statement = f"Auto-fix complete: {details}. {rerun_msg}"
-                else:
-                    boss_statement = (
-                        f"Auto-fix applied: {details}. "
-                        f"(Loop guard: run #{latest.get('run_number')} already retried {prev_reruns} times)"
-                    )
-            else:
-                boss_statement = f"Fix attempt status: {details}"
-
-    save_state(state)
-    write_outputs(now_str, latest, error_occurred, boss_statement)
-
-    subprocess.run(["git", "config", "user.name", "gemini-boss-ai"], check=False)
-    subprocess.run(
-        ["git", "config", "user.email", "gemini-boss-ai@users.noreply.github.com"],
-        check=False,
-    )
-    subprocess.run(["git", "add", "."], check=False)
+            run_id = str(lates
