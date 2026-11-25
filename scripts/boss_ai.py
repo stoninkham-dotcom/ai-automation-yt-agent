@@ -1,4 +1,5 @@
 import ast
+import io
 import json
 import os
 import re
@@ -6,6 +7,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from datetime import datetime, timezone
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "")
@@ -43,6 +45,8 @@ def load_state():
             with open(BOSS_STATE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
+                    data.setdefault("rerun_counts", {})
+                    data.setdefault("last_fixed_run_id", None)
                     return data
         except Exception:
             pass
@@ -79,24 +83,32 @@ def gh_request(url, method="GET", payload=None, retries=3):
     raise last_exc
 
 
+def gh_download_bytes(url, timeout=45):
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "gemini-boss-news-watchdog",
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
 def trigger_workflow(workflow_id_or_file, ref="main", fallback_ref="main"):
     if not (REPO and TOKEN and workflow_id_or_file):
         return False, "Workflow trigger ke liye repo/token missing hai."
 
     candidates = []
-    if isinstance(workflow_id_or_file, (list, tuple)):
-        for item in workflow_id_or_file:
-            if item is not None and str(item).strip():
-                s = str(item).strip()
-                if s not in candidates:
-                    candidates.append(s)
-                base = os.path.basename(s)
-                if base and base not in candidates:
-                    candidates.append(base)
-    else:
-        s = str(workflow_id_or_file).strip()
-        if s:
-            candidates.append(s)
+    raw_items = (
+        list(workflow_id_or_file)
+        if isinstance(workflow_id_or_file, (list, tuple))
+        else [workflow_id_or_file]
+    )
+    for item in raw_items:
+        if item is not None and str(item).strip():
+            s = str(item).strip()
+            if s not in candidates:
+                candidates.append(s)
             base = os.path.basename(s)
             if base and base not in candidates:
                 candidates.append(base)
@@ -155,7 +167,7 @@ def _call_gemini_model(model_name, prompt, use_json_mime=False):
     if use_json_mime:
         payload["generationConfig"] = {
             "responseMimeType": "application/json",
-            "temperature": 0.2,
+            "temperature": 0.1,
         }
 
     req = urllib.request.Request(
@@ -164,7 +176,7 @@ def _call_gemini_model(model_name, prompt, use_json_mime=False):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=90) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
     candidates = data.get("candidates", [])
@@ -224,24 +236,50 @@ def list_repo_files():
     ]
 
 
+def sanitize_text(text):
+    return re.sub(r"[\u200b-\u200f\ufeff]", "", text)
+
+
 def validate_candidate_content(path, content):
     if not isinstance(content, str) or not content.strip():
         return False, "Empty content"
+
+    cleaned = sanitize_text(content)
+    line_count = len(cleaned.splitlines())
+    if line_count < 3:
+        return False, f"Code too short ({line_count} lines)"
+
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                old_content = f.read()
+            old_lines = len(old_content.splitlines())
+            if old_lines >= 40 and line_count < int(old_lines * 0.45):
+                return False, f"Truncated output ({line_count} vs {old_lines} lines)"
+        except OSError:
+            pass
+
     if path.endswith(".py"):
         try:
-            ast.parse(content)
+            tree = ast.parse(cleaned)
+            compile(tree, filename=path, mode="exec")
         except SyntaxError as exc:
-            return False, f"Python syntax invalid: {exc}"
+            return False, f"Python SyntaxError (line {exc.lineno}): {exc.msg}"
+        except Exception as exc:
+            return False, f"Python compile error: {exc}"
     elif path.endswith(".json"):
         try:
-            json.loads(content)
+            json.loads(cleaned)
         except json.JSONDecodeError as exc:
             return False, f"JSON invalid: {exc}"
-    return True, "OK"
+
+    return True, cleaned
 
 
 def extract_json_object(raw_text):
-    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+    cleaned = re.sub(
+        r"^```(?:json)?\s*|\s*```$", "", raw_text.strip(), flags=re.MULTILINE
+    ).strip()
     try:
         obj = json.loads(cleaned)
         if isinstance(obj, dict):
@@ -260,86 +298,10 @@ def extract_json_object(raw_text):
     return None
 
 
-def try_auto_fix(run_info, failed_steps, error_logs=""):
-    if not GEMINI_KEY:
-        return False, "GEMINI_API_KEY missing."
-
-    candidate_files = list_repo_files()
-    file_snippets = []
-    for path in candidate_files[:20]:
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            if len(content) <= 8000:
-                file_snippets.append(f"=== FILE: {path} ===\n{content}")
-        except OSError:
-            continue
-
-    context_text = "\n\n".join(file_snippets) if file_snippets else "No source files."
-    prompt = (
-        "You are Gemini Boss AI, an autonomous SRE & code-repair engineer for a 24/7 YouTube news automation pipeline.\n"
-        f"Failed workflow: {run_info.get('name')} (#{run_info.get('run_number')}, path={run_info.get('path')})\n"
-        f"Conclusion: {run_info.get('conclusion')}\n"
-        f"Failed steps: {', '.join(failed_steps) if failed_steps else 'Unknown'}\n"
-        f"Log tail:\n{error_logs[-1500:] if error_logs else 'N/A'}\n\n"
-        "Return STRICT JSON only:\n"
-        "{\n"
-        '  "can_fix": true or false,\n'
-        '  "summary": "concise explanation of root cause and fix",\n'
-        '  "edits": [{"path": "relative/path.py", "content": "complete valid file content"}]\n'
-        "}\n"
-        "Strict rules:\n"
-        "- Fix root cause cleanly without breaking existing features.\n"
-        "- Never edit boss_ai.py, boss_monitor.yml, dashboard.md, state.json, or daily_log.md.\n"
-        "- Provide complete updated file content for every edited file.\n\n"
-        f"{context_text}"
-    )
-
-    raw, err_detail = ask_gemini(prompt, response_mime_type="application/json")
-    if not raw:
-        return False, f"Gemini se jawab nahi mila ({err_detail})."
-
-    parsed = extract_json_object(raw)
-    if not parsed:
-        return False, f"Invalid JSON response: {raw[:300]}"
-
-    can_fix = bool(parsed.get("can_fix"))
-    summary = str(parsed.get("summary") or "Analysis complete.").strip()
-    edits = parsed.get("edits") if isinstance(parsed.get("edits"), list) else []
-
-    if not can_fix or not edits:
-        return False, summary
-
-    applied_files = []
-    rejected_notes = []
-    for edit in edits:
-        if not isinstance(edit, dict):
-            continue
-        target = str(edit.get("path") or "").strip().lstrip("./")
-        new_content = edit.get("content")
-        if target not in candidate_files or target in BLOCKED_PATHS:
-            rejected_notes.append(f"{target} (blocked/untracked)")
-            continue
-        ok, reason = validate_candidate_content(target, new_content)
-        if not ok:
-            rejected_notes.append(f"{target} ({reason})")
-            continue
-        os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        applied_files.append(target)
-
-    if not applied_files:
-        extra = f" | Rejected: {', '.join(rejected_notes)}" if rejected_notes else ""
-        return False, f"{summary}{extra}"
-
-    extra = f" (Skipped invalid: {', '.join(rejected_notes)})" if rejected_notes else ""
-    return True, f"{summary} [Fixed: {', '.join(applied_files)}]{extra}"
-
-
 def fetch_failed_steps_and_logs(run_id):
     failed_steps = []
-    log_lines = []
+    log_chunks = []
+
     try:
         jobs = gh_request(
             f"https://api.github.com/repos/{REPO}/actions/runs/{run_id}/jobs"
@@ -350,8 +312,139 @@ def fetch_failed_steps_and_logs(run_id):
                 if step.get("conclusion") == "failure":
                     failed_steps.append(f"{job_name} -> {step.get('name')}")
     except Exception as exc:
-        log_lines.append(f"Jobs fetch error: {exc}")
-    return failed_steps, "\n".join(log_lines)
+        log_chunks.append(f"Jobs fetch warning: {exc}")
+
+    # Download run logs zip to extract real traceback/error lines
+    try:
+        zip_bytes = gh_download_bytes(
+            f"https://api.github.com/repos/{REPO}/actions/runs/{run_id}/logs"
+        )
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            for member in zf.namelist():
+                if not member.lower().endswith(".txt"):
+                    continue
+                try:
+                    raw_log = zf.read(member).decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                relevant = []
+                for line in raw_log.splitlines():
+                    low = line.lower()
+                    if any(
+                        k in low
+                        for k in (
+                            "error",
+                            "traceback",
+                            "exception",
+                            "syntaxerror",
+                            "modulenotfounderror",
+                            "importerror",
+                            "failed",
+                        )
+                    ):
+                        relevant.append(line)
+                if relevant:
+                    log_chunks.append(
+                        f"--- {member} ---\n" + "\n".join(relevant[-25:])
+                    )
+    except Exception as exc:
+        log_chunks.append(f"Log archive note: {exc}")
+
+    combined = "\n".join(log_chunks)
+    return failed_steps, combined[-2500:] if combined else ""
+
+
+def try_auto_fix(run_info, failed_steps, error_logs=""):
+    if not GEMINI_KEY:
+        return False, "GEMINI_API_KEY missing."
+
+    candidate_files = list_repo_files()
+    file_snippets = []
+    for path in candidate_files[:25]:
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            if len(content) <= 18000:
+                file_snippets.append(f"=== FILE: {path} ===\n{content}")
+        except OSError:
+            continue
+
+    context_text = "\n\n".join(file_snippets) if file_snippets else "No source files."
+    feedback_note = ""
+
+    for round_num in range(1, 3):
+        prompt = (
+            "You are a Principal Python & Automation SRE Engineer running Gemini Boss AI for a 24/7 YouTube news channel pipeline.\n"
+            "Diagnose the exact failure from the error logs and write clean, syntactically valid, complete, production-ready code fixes.\n"
+            f"Attempt round: {round_num}/2\n"
+            f"Failed workflow: {run_info.get('name')} (#{run_info.get('run_number')}, path={run_info.get('path')})\n"
+            f"Conclusion: {run_info.get('conclusion')}\n"
+            f"Failed steps: {', '.join(failed_steps) if failed_steps else 'Unknown'}\n"
+            f"Error logs:\n{error_logs if error_logs else 'N/A'}\n"
+            f"{feedback_note}\n"
+            "Return STRICT JSON only:\n"
+            "{\n"
+            '  "can_fix": true or false,\n'
+            '  "summary": "concise explanation of root cause and fix",\n'
+            '  "edits": [{"path": "relative/path.py", "content": "COMPLETE valid file content"}]\n'
+            "}\n"
+            "Strict engineering rules:\n"
+            "1. Output the ENTIRE file content for every edited file; never truncate or use placeholders.\n"
+            "2. Every .py edit must pass ast.parse and compile cleanly with zero SyntaxError or stray characters.\n"
+            "3. Keep existing features, resilience, and imports intact.\n"
+            "4. Never edit boss_ai.py, boss_monitor.yml, dashboard.md, state.json, or daily_log.md.\n\n"
+            f"{context_text}"
+        )
+
+        raw, err_detail = ask_gemini(prompt, response_mime_type="application/json")
+        if not raw:
+            return False, f"Gemini se jawab nahi mila ({err_detail})."
+
+        parsed = extract_json_object(raw)
+        if not parsed:
+            feedback_note = "\nPrevious output was not valid JSON. Return strict JSON only."
+            continue
+
+        can_fix = bool(parsed.get("can_fix"))
+        summary = str(parsed.get("summary") or "Analysis complete.").strip()
+        edits = parsed.get("edits") if isinstance(parsed.get("edits"), list) else []
+
+        if not can_fix or not edits:
+            return False, summary
+
+        applied_files = []
+        rejected_notes = []
+        for edit in edits:
+            if not isinstance(edit, dict):
+                continue
+            target = str(edit.get("path") or "").strip().lstrip("./")
+            new_content = edit.get("content")
+            if target not in candidate_files or target in BLOCKED_PATHS:
+                rejected_notes.append(f"{target} (blocked/untracked)")
+                continue
+            ok, validated_or_reason = validate_candidate_content(target, new_content)
+            if not ok:
+                rejected_notes.append(f"{target} -> {validated_or_reason}")
+                continue
+            os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(validated_or_reason)
+            applied_files.append(target)
+
+        if applied_files:
+            extra = (
+                f" (Skipped invalid: {', '.join(rejected_notes)})"
+                if rejected_notes
+                else ""
+            )
+            return True, f"{summary} [Fixed: {', '.join(applied_files)}]{extra}"
+
+        feedback_note = (
+            f"\nPrevious edit failed validation: {'; '.join(rejected_notes)}. "
+            "Fix all syntax/completeness issues and return the complete valid file."
+        )
+
+    return False, f"Fix validation failed: {'; '.join(rejected_notes) if rejected_notes else 'No valid edit'}"
 
 
 def write_outputs(now_str, latest, error_occurred, boss_statement):
@@ -372,7 +465,7 @@ def write_outputs(now_str, latest, error_occurred, boss_statement):
     dashboard_content = (
         "# Gemini Boss Dashboard\n\n"
         f"## Live Status ({now_str})\n"
-        "- **Mode:** 24/7 News Pipeline Watchdog + Syntax-Safe Auto-Fix + Loop-Guarded Auto-Rerun\n"
+        "- **Mode:** 24/7 News Pipeline Watchdog + Log-Aware Auto-Fix + Loop-Guarded Auto-Rerun\n"
         f"- **Latest Target Run:** {run_label}\n"
         f"- **Status:** {error_line}\n"
         f"- **Gemini Boss:** {boss_statement}\n"
@@ -450,17 +543,4 @@ def main():
     subprocess.run(["git", "config", "user.name", "gemini-boss-ai"], check=False)
     subprocess.run(
         ["git", "config", "user.email", "gemini-boss-ai@users.noreply.github.com"],
-        check=False,
-    )
-    subprocess.run(["git", "add", "."], check=False)
-    diff = subprocess.run(["git", "diff", "--cached", "--quiet"])
-    if diff.returncode != 0:
-        subprocess.run(
-            ["git", "commit", "-m", f"chore(gemini-boss): {now_str}"],
-            check=False,
-        )
-        subprocess.run(["git", "push"], check=False)
-
-
-if __name__ == "__main__":
-    main()
+        check=Fal
