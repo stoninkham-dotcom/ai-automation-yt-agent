@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import datetime
 import json
 import os
@@ -37,18 +37,18 @@ os.makedirs(out_dir, exist_ok=True)
 PROMPT = f"""
 You are a top-tier creative director and scriptwriter for a high-performing US/UK tech & AI operations YouTube channel.
 Write a punchy, human, high-retention video script on today's angle:
-\"{TODAY_TOPIC}\"
+"{TODAY_TOPIC}"
 
 Strict quality & retention rules:
-- First 3 seconds must hit with a bold contrarian truth or sharp real-world stakes (no \"Hey guys\", no \"In today's fast-paced world\", no \"Let's dive in\").
+- First 3 seconds must hit with a bold contrarian truth or sharp real-world stakes (no "Hey guys", no "In today's fast-paced world", no "Let's dive in").
 - Write for spoken ear, not a textbook: short sentences, natural pauses, crisp transitions, zero corporate buzzwords.
 - Include clear tension -> mechanism -> proof/reality check -> sharp takeaway so viewers stay through the end.
 - Make every run feel fresher, sharper, and more actionable than generic advice.
 - Output strictly valid JSON with exact keys:
-  \"title\" (curiosity-driven, clean, under 65 chars),
-  \"description\" (concise, natural, keyword-smart without spam),
-  \"narration\" (full spoken script, ~180-240 words for tight pacing),
-  \"scenes\" (list of 4 distinct visual b-roll/scene prompts matching the script beats).
+  "title" (curiosity-driven, clean, under 65 chars),
+  "description" (concise, natural, keyword-smart without spam),
+  "narration" (full spoken script, ~180-240 words for tight pacing),
+  "scenes" (list of 4 distinct visual b-roll/scene prompts matching the script beats).
 """
 
 PER_MODEL_TIMEOUT_SEC = 20
@@ -118,7 +118,7 @@ def generate_with_fallback(prompt_text: str):
                     print(f"Success with model: {model_name}")
                     return parsed, model_name
             print(f"{model_name} returned empty/invalid output, moving to next model.")
-        except FuturesTimeoutError:
+        except TimeoutError:
             print(f"{model_name} timed out after {PER_MODEL_TIMEOUT_SEC}s, skipping fast.")
             executor.shutdown(wait=False, cancel_futures=True)
         except Exception as exc:
