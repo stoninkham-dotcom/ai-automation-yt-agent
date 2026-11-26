@@ -383,8 +383,6 @@ def fetch_failed_steps_and_logs(run_id):
 
     combined = "\n".join(log_chunks)
     return failed_steps, combined[-2500:] if combined else ""
-
-
 def try_auto_fix(run_info, failed_steps, error_logs=""):
     if not GEMINI_KEY:
         return False, "GEMINI_API_KEY missing."
@@ -556,4 +554,42 @@ def main():
             and latest.get("conclusion") not in (None, "success", "skipped", "cancelled")
         ):
             error_occurred = True
-            run_id = str(lates
+            run_id = str(latest.get("id"))
+            head_sha = str(latest.get("head_sha") or "")[:10]
+            guard_key = f"{run_id}:{head_sha}" if head_sha else run_id
+            failed_steps, log_snippet = fetch_failed_steps_and_logs(run_id)
+            fixed, details = try_auto_fix(latest, failed_steps, log_snippet)
+
+            if fixed:
+                git_push_if_changed(now_str)
+                prev_reruns = int(rerun_counts.get(guard_key, 0))
+                if prev_reruns < MAX_RERUNS_PER_KEY:
+                    wf_targets = [
+                        latest.get("workflow_id"),
+                        latest.get("path"),
+                    ]
+                    branch = latest.get("head_branch") or "main"
+                    rerun_ok, rerun_msg = trigger_workflow(
+                        wf_targets, ref=branch, fallback_ref="main"
+                    )
+                    if rerun_ok:
+                        rerun_counts[guard_key] = prev_reruns + 1
+                        state["rerun_counts"] = rerun_counts
+                        state["last_fixed_run_id"] = run_id
+                    boss_statement = f"Auto-fix complete: {details}. {rerun_msg}"
+                else:
+                    boss_statement = (
+                        f"Auto-fix applied: {details}. "
+                        f"(Loop guard: run #{latest.get('run_number')} already retried {prev_reruns} times)"
+                    )
+            else:
+                boss_statement = f"Fix attempt status: {details}"
+
+    save_state(state)
+    write_outputs(now_str, latest, error_occurred, boss_statement)
+    git_push_if_changed(now_str)
+
+
+if __name__ == "__main__":
+    main()
+        
